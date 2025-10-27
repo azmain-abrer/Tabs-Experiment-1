@@ -1,0 +1,10 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- White background with safe zone for maskable icon -->
+  <rect width="512" height="512" fill="#ffffff"/>
+  
+  <!-- Sparo brand color circle in safe zone (80% = ~410px diameter, centered) -->
+  <circle cx="256" cy="256" r="205" fill="#7482FF"/>
+  
+  <!-- "S" letter in white -->
+  <text x="256" y="256" font-family="system-ui, -apple-system, sans-serif" font-size="256" font-weight="700" fill="#ffffff" text-anchor="middle" dominant-baseline="central">S</text>
+</svg>

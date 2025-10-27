@@ -60,6 +60,39 @@ export default function App() {
     };
   }, []);
 
+  // PWA: Inject meta tags and manifest on mount
+  useEffect(() => {
+    // Add manifest link
+    const manifestLink = document.createElement('link');
+    manifestLink.rel = 'manifest';
+    manifestLink.href = '/manifest.json';
+    document.head.appendChild(manifestLink);
+
+    // Add PWA meta tags
+    const metaTags = [
+      { name: 'apple-mobile-web-app-capable', content: 'yes' },
+      { name: 'apple-mobile-web-app-status-bar-style', content: 'default' },
+      { name: 'apple-mobile-web-app-title', content: 'Sparo' },
+      { name: 'mobile-web-app-capable', content: 'yes' },
+      { name: 'theme-color', content: '#ffffff' },
+    ];
+
+    const createdMetaTags: HTMLMetaElement[] = [];
+    metaTags.forEach(({ name, content }) => {
+      const meta = document.createElement('meta');
+      meta.name = name;
+      meta.content = content;
+      document.head.appendChild(meta);
+      createdMetaTags.push(meta);
+    });
+
+    // Cleanup on unmount
+    return () => {
+      document.head.removeChild(manifestLink);
+      createdMetaTags.forEach(meta => document.head.removeChild(meta));
+    };
+  }, []);
+
   async function loadTasksFromServer() {
     setIsLoading(true);
     setError(null);
