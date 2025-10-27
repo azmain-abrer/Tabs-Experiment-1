@@ -9,6 +9,7 @@ import imgBorder from 'figma:asset/fe0d9e45bec9572f879783d0ba7961b8fc734caa.png'
  * TabBar component with synchronized sliding animations
  * Phase 1f: Implements position-based animation using shared dragProgress MotionValue
  * Phase 2a: Added vertical swipe detection for tab switcher activation
+ * Updated: Added inactive tab indicators for left/right tabs
  */
 
 interface TabBarProps {
@@ -18,10 +19,12 @@ interface TabBarProps {
   tabCount: number;
   dragProgress: MotionValue<number>;
   dragDirection: 'left' | 'right' | null;
+  isTransitioning: boolean;
   onSwipeStart: (clientX: number) => boolean;
   onSwipeMove: (clientX: number) => void;
   onSwipeEnd: () => void;
   onTabNameChange: (tabId: string, newName: string) => void;
+  onTaskNameChange: (newName: string) => void;
   onSwitcherToggle: () => void;
   onSwipeUp: () => void;
   isFirstTab: boolean;
@@ -36,10 +39,12 @@ export default function TabBar({
   tabCount, 
   dragProgress,
   dragDirection,
+  isTransitioning,
   onSwipeStart,
   onSwipeMove,
   onSwipeEnd,
   onTabNameChange,
+  onTaskNameChange,
   onSwitcherToggle,
   onSwipeUp,
   isFirstTab,
@@ -147,6 +152,11 @@ export default function TabBar({
   const hasTriggeredSwipeUpRef = useRef(false);
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    // Block all gestures during transitions
+    if (isTransitioning) {
+      return;
+    }
+    
     isGestureActiveRef.current = true;
     clickStartPosRef.current = { x: e.clientX, y: e.clientY };
     hasDraggedRef.current = false;
@@ -157,7 +167,7 @@ export default function TabBar({
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isGestureActiveRef.current) return;
+    if (!isGestureActiveRef.current || isTransitioning) return;
     
     const deltaX = e.clientX - clickStartPosRef.current.x;
     const deltaY = e.clientY - clickStartPosRef.current.y;
@@ -296,7 +306,7 @@ export default function TabBar({
 
   return (
     <div
-      className="fixed bottom-0 left-0 right-0 z-50"
+      className={`fixed bottom-0 left-0 right-0 z-50 ${isTransitioning ? 'pointer-events-none' : ''}`}
       style={{ height: `${tabBarHeight}px` }}
     >
       <div className="backdrop-blur-[5px] backdrop-filter bg-[rgba(255,255,255,0.8)] relative size-full">
@@ -306,10 +316,26 @@ export default function TabBar({
         <TabActions tabCount={tabCount} onSwitcherClick={onSwitcherToggle} />
         
         {/* Tab Switcher with sliding address bars */}
-        <div className="absolute h-[51px] left-0 overflow-hidden right-0 top-[27px]" data-name="Tab-Switcher">
+        <div className="absolute h-[51px] left-0 overflow-x-visible overflow-y-hidden right-0 top-[27px] p-[0px]" data-name="Tab-Switcher">
+          {/* Left indicator - shows when there are tabs to the left */}
+          {!isFirstTab && !dragDirection && (
+            <InactiveTabIndicator 
+              direction="left" 
+              tab={tabs[tabs.findIndex(t => t.id === activeTabId) - 1]} 
+            />
+          )}
+
+          {/* Right indicator - shows when there are tabs to the right */}
+          {!isLastTab && !dragDirection && (
+            <InactiveTabIndicator 
+              direction="right" 
+              tab={tabs[tabs.findIndex(t => t.id === activeTabId) + 1]} 
+            />
+          )}
+
           {/* Current tab address bar */}
           <motion.div
-            className="absolute h-[51px] left-[20px] right-[20px] top-1/2 translate-y-[-50%]"
+            className="absolute h-[51px] left-[40px] right-[40px] top-1/2 translate-y-[-50%]"
             style={{ x: currentTabX, willChange: 'transform' }}
           >
             <div 
@@ -358,7 +384,7 @@ export default function TabBar({
           {/* Adjacent tab address bar (sliding in/out) */}
           {showAdjacentTab && adjacentTab && (
             <motion.div
-              className="absolute h-[51px] left-[20px] right-[20px] top-1/2 translate-y-[-50%]"
+              className="absolute h-[51px] left-[40px] right-[40px] top-1/2 translate-y-[-50%]"
               style={{ x: adjacentTabX, willChange: 'transform' }}
             >
               <div className="bg-white h-full rounded-[100px]">
@@ -383,7 +409,7 @@ export default function TabBar({
         </div>
         
         {/* Task Name pill */}
-        <TaskName taskName={taskName} />
+        <TaskName taskName={taskName} onTaskNameChange={onTaskNameChange} />
       </div>
     </div>
   );
@@ -418,7 +444,7 @@ function ActionsUndo() {
 
 function TabActions({ tabCount, onSwitcherClick }: { tabCount: number; onSwitcherClick: () => void }) {
   return (
-    <div className="absolute box-border content-stretch flex h-[58px] items-center justify-between left-0 px-[20px] py-0 right-0 top-[93px]" data-name="Tab-Actions">
+    <div className="absolute box-border content-stretch flex h-[58px] items-center justify-between left-0 px-[20px] py-0 right-0 top-[93px] px-[30px] py-[0px]" data-name="Tab-Actions">
       <ActionsHome />
       <ActionsSwitcher tabCount={tabCount} onClick={onSwitcherClick} />
       <ButtonsSparoOn />
@@ -529,7 +555,7 @@ function ActionsComments() {
         </svg>
       </div>
       <div className="absolute content-stretch flex flex-col items-center justify-center left-1/2 overflow-clip top-[calc(50%-0.5px)] translate-x-[-50%] translate-y-[-50%]" data-name="Comment-Count">
-        <p className="capitalize font-['Outfit:Bold',_sans-serif] font-bold h-[10px] leading-none max-w-[13px] relative shrink-0 text-[#7482ff] text-[10px] text-center w-[12px]">1</p>
+        <p className="capitalize font-['Outfit:Bold',_sans-serif] font-bold h-[10px] leading-none max-w-[13px] relative shrink-0 text-[#7482ff] text-[10px] text-center w-[12px]"></p>
       </div>
     </div>
   );
@@ -550,12 +576,138 @@ function ActionsShare() {
   );
 }
 
-function TaskName({ taskName }: { taskName: string }) {
+function TaskName({ taskName, onTaskNameChange }: { taskName: string; onTaskNameChange: (newName: string) => void }) {
+  const [isEditingTask, setIsEditingTask] = useState(false);
+  const [editingTaskText, setEditingTaskText] = useState('');
+  const [originalTaskName, setOriginalTaskName] = useState('');
+  const taskInputRef = useRef<HTMLInputElement>(null);
+  const taskContainerRef = useRef<HTMLDivElement>(null);
+  const [taskInputWidth, setTaskInputWidth] = useState<number | undefined>(undefined);
+
+  // Focus input when editing starts
+  useEffect(() => {
+    if (isEditingTask && taskInputRef.current) {
+      taskInputRef.current.focus();
+      taskInputRef.current.select();
+    }
+  }, [isEditingTask]);
+
+  // Measure text width for dynamic input sizing
+  useEffect(() => {
+    if (isEditingTask && taskContainerRef.current) {
+      const measureSpan = taskContainerRef.current.querySelector('.task-measure-text') as HTMLSpanElement;
+      if (measureSpan) {
+        setTaskInputWidth(measureSpan.offsetWidth);
+      }
+    }
+  }, [editingTaskText, isEditingTask]);
+
+  const handleTaskClick = () => {
+    setIsEditingTask(true);
+    setEditingTaskText(taskName);
+    setOriginalTaskName(taskName);
+  };
+
+  const handleTaskChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setEditingTaskText(e.target.value);
+  };
+
+  const handleTaskBlur = () => {
+    saveTaskName();
+  };
+
+  const handleTaskKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      saveTaskName();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setIsEditingTask(false);
+      setEditingTaskText('');
+    }
+  };
+
+  const saveTaskName = () => {
+    const trimmedName = editingTaskText.trim();
+    
+    // If empty or unchanged, keep original name
+    if (trimmedName === '' || trimmedName === originalTaskName) {
+      setIsEditingTask(false);
+      setEditingTaskText('');
+      return;
+    }
+    
+    // Save the new name
+    onTaskNameChange(trimmedName);
+    setIsEditingTask(false);
+    setEditingTaskText('');
+  };
+
   return (
     <div className="absolute bg-[#f2f2f7] box-border content-stretch flex items-center justify-center left-1/2 min-w-[100px] overflow-clip px-[12px] py-[4px] rounded-[100px] top-[-12px] translate-x-[-50%]" data-name="Task-Name">
-      <div className="box-border content-stretch flex gap-[10px] items-center justify-center pb-px pt-0 px-0 relative shrink-0">
-        <p className="capitalize font-['Outfit:Medium',_sans-serif] font-medium leading-[normal] max-w-[200px] overflow-ellipsis overflow-hidden relative shrink-0 text-[#8e8e93] text-[12px] text-center text-nowrap whitespace-pre">{taskName}</p>
+      <div 
+        ref={taskContainerRef}
+        className="box-border content-stretch flex gap-[10px] items-center justify-center pb-px pt-0 px-0 relative shrink-0"
+      >
+        {isEditingTask ? (
+          <>
+            <input
+              ref={taskInputRef}
+              type="text"
+              value={editingTaskText}
+              onChange={handleTaskChange}
+              onBlur={handleTaskBlur}
+              onKeyDown={handleTaskKeyDown}
+              className="capitalize font-['Outfit:Medium',_sans-serif] font-medium leading-[normal] max-w-[200px] relative shrink-0 text-[#8e8e93] text-[12px] text-center bg-transparent border-none outline-none p-0 m-0 min-w-0"
+              style={{ width: taskInputWidth ? `${taskInputWidth}px` : 'auto' }}
+            />
+            <span 
+              className="task-measure-text capitalize font-['Outfit:Medium',_sans-serif] font-medium leading-[normal] text-[12px] absolute opacity-0 pointer-events-none whitespace-pre"
+              aria-hidden="true"
+            >
+              {editingTaskText || taskName}
+            </span>
+          </>
+        ) : (
+          <p 
+            onClick={handleTaskClick}
+            className="capitalize font-['Outfit:Medium',_sans-serif] font-medium leading-[normal] max-w-[200px] overflow-ellipsis overflow-hidden relative shrink-0 text-[#8e8e93] text-[12px] text-center text-nowrap whitespace-pre cursor-pointer"
+          >
+            {taskName}
+          </p>
+        )}
       </div>
+    </div>
+  );
+}
+
+// Inactive tab indicator - shows peeking tabs on left/right edges
+function InactiveTabIndicator({ direction, tab }: { direction: 'left' | 'right'; tab?: Tab }) {
+  if (!tab) return null;
+
+  // Adjusted positioning to create visible gaps between tabs
+  const positionClass = direction === 'left' 
+    ? 'left-[-330px]'  // Position off-screen to the left with gap
+    : 'right-[-330px]'; // Position off-screen to the right with gap
+
+  return (
+    <div 
+      className={`absolute bg-white h-[51px] ${positionClass} rounded-[100px] top-1/2 translate-y-[-50%] w-[360px] pointer-events-none`}
+      data-name="Inactive Tab"
+    >
+      <div className="h-[51px] overflow-clip relative rounded-[inherit] w-[360px]">
+        <div className="absolute box-border content-stretch flex gap-[8px] items-center justify-center left-1/2 px-0 py-[5px] top-1/2 translate-x-[-50%] translate-y-[-50%] w-[112px]">
+          <div className="h-[18px] relative shrink-0 w-[16px]">
+            <CanvasIcon canvasType={tab.canvasType || null} />
+          </div>
+          <div className="box-border content-stretch flex items-center pb-px pt-0 px-0 relative shrink-0">
+            <p className="capitalize font-['Outfit:Regular',_sans-serif] font-normal leading-[normal] max-w-[88px] overflow-ellipsis overflow-hidden relative shrink-0 text-[16px] text-center text-neutral-950 text-nowrap whitespace-pre">
+              {tab.name}
+            </p>
+          </div>
+        </div>
+      </div>
+      <div aria-hidden="true" className="absolute border border-[rgba(0,0,0,0.1)] border-solid inset-0 pointer-events-none rounded-[100px]" />
     </div>
   );
 }

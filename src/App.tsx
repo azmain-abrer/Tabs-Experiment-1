@@ -12,6 +12,13 @@ import { fetchTasks, saveTasks } from './utils/supabase/api';
  * Phase 1f: Added drag progress infrastructure for synchronized animations
  * Phase 2a: Added tab switcher activation (button tap and upward swipe)
  * Phase 2b: Added tab closing (button tap and swipe-to-delete with simplified animations)
+ * 
+ * Transition Safety:
+ * - isTransitioning state blocks all new drag gestures during animations
+ * - Triple RAF ensures React fully commits before resetting animation state
+ * - Safety timeouts prevent stuck states if animations fail to complete
+ * - pointer-events-none applied during transitions to prevent interaction conflicts
+ * - Tab switching happens synchronously before animation for immediate state updates
  */
 
 export default function App() {
@@ -96,7 +103,7 @@ export default function App() {
       tabs: [
         {
           id: `tab-${Date.now()}`,
-          name: 'Blank Tab 1',
+          name: 'Blank Tab',
           canvasType: null,
           createdAt: Date.now(),
           isActive: true,
@@ -114,14 +121,9 @@ export default function App() {
   const handleCanvasTypeSelect = (type: CanvasType) => {
     if (!activeTab || !task) return;
 
-    // Count existing "Untitled" tabs of this canvas type in the task
+    // Generate new tab name: "Untitled [CanvasType]"
     const canvasTypeName = type.charAt(0).toUpperCase() + type.slice(1); // Capitalize: doc -> Doc
-    const untitledTabsOfType = task.tabs.filter((tab) => 
-      tab.name.startsWith(`Untitled ${canvasTypeName}`)
-    ).length;
-
-    // Generate new tab name: "Untitled [CanvasType] [number]"
-    const newTabName = `Untitled ${canvasTypeName} ${untitledTabsOfType + 1}`;
+    const newTabName = `Untitled ${canvasTypeName}`;
 
     // Update the active tab's canvas type and name
     setTask((prevTask) => {
@@ -156,7 +158,8 @@ export default function App() {
 
   // Drag handlers for synchronized animations
   const handleSwipeStart = (clientX: number) => {
-    if (isTransitioning) {
+    // Block drag if transitioning or already dragging
+    if (isTransitioning || isDragging.current) {
       return false;
     }
     
@@ -164,6 +167,7 @@ export default function App() {
     dragStartX.current = clientX;
     lastClientX.current = clientX;
     setDragDirection(null);
+    dragProgress.set(0); // Ensure clean start
     return true;
   };
 
@@ -243,58 +247,70 @@ export default function App() {
 
     // Threshold met - switch tabs
     if (progress > threshold && actualDirection) {
+      // Set transitioning state IMMEDIATELY to block further input
       setIsTransitioning(true);
       
-      // Safety timeout to prevent stuck state
+      // Perform tab action synchronously
+      const nextIndex = actualDirection === 'left' 
+        ? (currentIndex === task.tabs.length - 1 ? currentIndex : currentIndex + 1)
+        : currentIndex - 1;
+      
+      const shouldCreateTab = actualDirection === 'left' && currentIndex === task.tabs.length - 1;
+      
+      // Execute state change
+      if (shouldCreateTab) {
+        createNewTab();
+      } else {
+        switchToTab(nextIndex);
+      }
+      
+      // Safety timeout to prevent stuck state (increased to 1.5s)
       transitionTimeoutRef.current = window.setTimeout(() => {
+        console.warn('Transition timeout - forcing complete reset');
         dragProgress.set(0);
         setDragDirection(null);
         setIsTransitioning(false);
+        isDragging.current = false;
         transitionTimeoutRef.current = null;
-      }, 1000);
+      }, 1500);
       
-      // Perform tab action IMMEDIATELY using calculated direction
-      if (actualDirection === 'left') {
-        if (currentIndex === task.tabs.length - 1) {
-          createNewTab();
-        } else {
-          switchToTab(currentIndex + 1);
-        }
-      } else if (actualDirection === 'right') {
-        switchToTab(currentIndex - 1);
-      }
-      
-      // Animate visual transition smoothly
-      animate(dragProgress, 1, {
-        duration: 0.2,
-        ease: [0.4, 0, 0.2, 1],
-        onComplete: () => {
-          if (transitionTimeoutRef.current) {
-            clearTimeout(transitionTimeoutRef.current);
-            transitionTimeoutRef.current = null;
-          }
-          // Double requestAnimationFrame ensures React has fully committed
-          requestAnimationFrame(() => {
+      // Animate visual transition smoothly AFTER state change
+      requestAnimationFrame(() => {
+        animate(dragProgress, 1, {
+          duration: 0.2,
+          ease: [0.4, 0, 0.2, 1],
+          onComplete: () => {
+            // Clear timeout
+            if (transitionTimeoutRef.current) {
+              clearTimeout(transitionTimeoutRef.current);
+              transitionTimeoutRef.current = null;
+            }
+            
+            // Triple RAF ensures React has fully committed and painted
             requestAnimationFrame(() => {
-              dragProgress.set(0);
-              setDragDirection(null);
-              setIsTransitioning(false);
+              requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                  dragProgress.set(0);
+                  setDragDirection(null);
+                  setIsTransitioning(false);
+                });
+              });
             });
-          });
-        },
+          },
+        });
       });
     } else {
       // Snap back (threshold not met or no direction)
       setIsTransitioning(true);
       
-      // Safety timeout
+      // Safety timeout (500ms is sufficient for snap-back)
       transitionTimeoutRef.current = window.setTimeout(() => {
         console.warn('Snap-back timeout - forcing reset');
         dragProgress.set(0);
         setDragDirection(null);
         setIsTransitioning(false);
         transitionTimeoutRef.current = null;
-      }, 500);
+      }, 600);
       
       animate(dragProgress, 0, {
         duration: 0.2,
@@ -304,8 +320,10 @@ export default function App() {
             clearTimeout(transitionTimeoutRef.current);
             transitionTimeoutRef.current = null;
           }
-          setDragDirection(null);
-          setIsTransitioning(false);
+          requestAnimationFrame(() => {
+            setDragDirection(null);
+            setIsTransitioning(false);
+          });
         }
       });
     }
@@ -331,14 +349,9 @@ export default function App() {
       return;
     }
 
-    // Count existing blank tabs
-    const blankTabCount = task.tabs.filter((tab) => 
-      tab.name.startsWith('Blank Tab')
-    ).length;
-
     const newTab: Tab = {
       id: `tab-${Date.now()}`,
-      name: `Blank Tab ${blankTabCount + 1}`,
+      name: 'Blank Tab',
       canvasType: null,
       createdAt: Date.now(),
       isActive: true,
@@ -389,6 +402,17 @@ export default function App() {
     setIsSwitcherOpen(true);
   };
 
+  // Handle task name change
+  const handleTaskNameChange = (newName: string) => {
+    setTask((prevTask) => {
+      if (!prevTask) return prevTask;
+      return {
+        ...prevTask,
+        name: newName,
+      };
+    });
+  };
+
   // Handle tab closing from switcher
   const handleTabClose = (tabId: string) => {
     if (!task) return;
@@ -399,13 +423,9 @@ export default function App() {
 
     // If closing the last tab, create a new blank tab instead
     if (isLastTab) {
-      const blankTabCount = task.tabs.filter((tab) => 
-        tab.name.startsWith('Blank Tab')
-      ).length;
-
       const newTab: Tab = {
         id: `tab-${Date.now()}`,
-        name: `Blank Tab ${blankTabCount + 1}`,
+        name: 'Blank Tab',
         canvasType: null,
         createdAt: Date.now(),
         isActive: true,
@@ -478,7 +498,7 @@ export default function App() {
     <div className="relative min-h-screen bg-white">
       {/* Tab Content Area - fills viewport above tab bar */}
       <div
-        className="h-[calc(100vh-185px)]" // Height is viewport minus tab bar height
+        className={`h-[calc(100vh-185px)] ${isTransitioning ? 'pointer-events-none' : ''}`}
       >
         <CanvasArea
           tabs={task.tabs}
@@ -497,10 +517,12 @@ export default function App() {
         tabCount={task.tabs.length}
         dragProgress={dragProgress}
         dragDirection={dragDirection}
+        isTransitioning={isTransitioning}
         onSwipeStart={handleSwipeStart}
         onSwipeMove={handleSwipeMove}
         onSwipeEnd={handleSwipeEnd}
         onTabNameChange={handleTabNameChange}
+        onTaskNameChange={handleTaskNameChange}
         onSwitcherToggle={handleSwitcherToggle}
         onSwipeUp={handleSwipeUp}
         isFirstTab={task.tabs.findIndex((tab) => tab.id === activeTab?.id) === 0}
@@ -516,6 +538,7 @@ export default function App() {
         taskName={task.name}
         onTabSelect={handleTabSelect}
         onTabClose={handleTabClose}
+        onNewTab={createNewTab}
         onClose={handleSwitcherToggle}
       />
     </div>

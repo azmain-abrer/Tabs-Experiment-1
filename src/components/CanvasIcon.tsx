@@ -23,10 +23,10 @@ export default function CanvasIcon({ canvasType, size = 'small' }: CanvasIconPro
       <div className="h-[18px] relative shrink-0 w-[16px]" data-name="Tab-Icon">
         <svg className="block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 16 18">
           <g id="Tab-Icon">
-            {/* Blank canvas icon - using a simple rectangle shape */}
             <path 
-              d="M2 0H14C15.1046 0 16 0.89543 16 2V16C16 17.1046 15.1046 18 14 18H2C0.89543 18 0 17.1046 0 16V2C0 0.89543 0.89543 0 2 0Z" 
+              d="M10.2846 3.9375V0.5625C10.2846 0.2475 10.0332 0 9.71322 0H1.14273C0.514229 0 0 0.50625 0 1.125V16.875C0 17.4938 0.514229 18 1.14273 18H14.8555C15.484 18 15.9982 17.4938 15.9982 16.875V6.1875C15.9982 5.8725 15.7468 5.625 15.4269 5.625H11.9987C11.0502 5.625 10.2846 4.87125 10.2846 3.9375ZM11.4273 0.5625V3.375C11.4273 3.99375 11.9415 4.5 12.57 4.5H15.4269C15.9411 4.5 16.1925 3.8925 15.8268 3.54375L12.3986 0.16875C12.0444 -0.19125 11.4273 0.0674999 11.4273 0.5625Z" 
               fill="var(--fill-0, #8E8E93)" 
+              id="Icons/Blank-Canvas"
             />
           </g>
         </svg>
