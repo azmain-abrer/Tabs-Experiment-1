@@ -53,25 +53,6 @@ export default function DraggableAddressBar({
   const DIRECTION_THRESHOLD = 15; // pixels to determine drag direction
   const RUBBER_BAND_RESISTANCE = 3; // resistance factor for rubber band
 
-  // Attach native touch listeners with passive: false to ensure preventDefault works
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const handleNativeTouchMove = (e: TouchEvent) => {
-      if (isDraggingRef.current) {
-        e.preventDefault();
-      }
-    };
-
-    // Use { passive: false } to allow preventDefault on touchmove
-    container.addEventListener('touchmove', handleNativeTouchMove, { passive: false });
-
-    return () => {
-      container.removeEventListener('touchmove', handleNativeTouchMove);
-    };
-  }, []);
-
   // Cleanup mouse listeners on unmount
   useEffect(() => {
     return () => {
@@ -183,9 +164,8 @@ export default function DraggableAddressBar({
 
   // Touch event handlers
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    // Prevent default to stop compatibility mouse events and scrolling
+    // Prevent default to stop compatibility mouse events from firing
     e.preventDefault();
-    e.stopPropagation();
     const touch = e.touches[0];
     handleDragStart(touch.clientX, touch.clientY);
   }, [handleDragStart]);
@@ -193,12 +173,15 @@ export default function DraggableAddressBar({
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
     if (!isDraggingRef.current) return;
     
-    // ALWAYS prevent default to stop scrolling interference
-    e.preventDefault();
-    e.stopPropagation();
-    
     const touch = e.touches[0];
     handleDragMove(touch.clientX, touch.clientY);
+    
+    // Prevent default if we're dragging in any direction
+    const deltaX = Math.abs(touch.clientX - dragStartX.current);
+    const deltaY = Math.abs(touch.clientY - dragStartY.current);
+    if (deltaX > 10 || deltaY > 10) {
+      e.preventDefault();
+    }
   }, [handleDragMove]);
 
   const handleTouchEnd = useCallback(() => {
@@ -272,7 +255,6 @@ export default function DraggableAddressBar({
         transform,
         transition,
         cursor: isDraggingRef.current ? 'grabbing' : 'grab',
-        touchAction: 'none', // Explicit CSS to prevent all touch behaviors
       }}
     >
       {children}
