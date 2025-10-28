@@ -141,7 +141,8 @@ export default function TabBar({
         : { id: `preview-${Date.now()}`, name: 'Blank Tab', canvasType: null, createdAt: Date.now(), isActive: false, commentCount: 0 })
     : null;
 
-  const showAdjacentTab = dragDirection !== null;
+  // Only show adjacent tab when there's actual drag progress (prevents flash at drag start)
+  const showAdjacentTab = dragDirection !== null && dragProgress.get() > 0.01;
 
   // Gesture tracking
   const isGestureActiveRef = useRef(false);
@@ -316,7 +317,7 @@ export default function TabBar({
         <TabActions tabCount={tabCount} onSwitcherClick={onSwitcherToggle} />
         
         {/* Tab Switcher with sliding address bars */}
-        <div className="absolute h-[51px] left-0 overflow-x-visible overflow-y-hidden right-0 top-[27px] p-[0px]" data-name="Tab-Switcher">
+        <div className="absolute h-[51px] left-0 overflow-hidden right-0 top-[27px] p-[0px]" style={{ touchAction: 'none' }} data-name="Tab-Switcher">
           {/* Left indicator - shows when there are tabs to the left */}
           {!isFirstTab && !dragDirection && (
             <InactiveTabIndicator 
@@ -340,6 +341,7 @@ export default function TabBar({
           >
             <div 
               className="bg-white h-full rounded-[100px] cursor-pointer"
+              style={{ touchAction: 'none' }}
               onPointerDown={handlePointerDown}
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}

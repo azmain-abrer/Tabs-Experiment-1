@@ -92,7 +92,8 @@ export default function CanvasArea({
   const targetTab = tabs[activeIndex];
 
   const effectiveDragDirection = dragDirection || lastDragDirectionRef.current;
-  const showAdjacentTab = effectiveDragDirection !== null || displayedTabIndex !== activeIndex;
+  // Only show adjacent tab when there's actual drag progress (prevents flash at drag start)
+  const showAdjacentTab = (effectiveDragDirection !== null && dragProgress.get() > 0.01) || displayedTabIndex !== activeIndex;
 
   const adjacentTab = effectiveDragDirection === 'right' && displayedTabIndex > 0 
     ? tabs[displayedTabIndex - 1]

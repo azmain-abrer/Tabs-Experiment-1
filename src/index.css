@@ -859,16 +859,8 @@
     overflow: hidden;
   }
 
-  .overflow-x-visible {
-    overflow-x: visible;
-  }
-
   .overflow-y-auto {
     overflow-y: auto;
-  }
-
-  .overflow-y-hidden {
-    overflow-y: hidden;
   }
 
   .rounded-2xl {
