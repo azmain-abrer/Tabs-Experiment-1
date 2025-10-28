@@ -61,8 +61,10 @@ export default function TabBar({
   const [isEditing, setIsEditing] = useState(false);
   const [editingText, setEditingText] = useState('');
   const [originalName, setOriginalName] = useState('');
+  const [textWidth, setTextWidth] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLSpanElement>(null);
 
   // Displayed tab index (lags during drag for smooth visual transition)
   const activeIndex = tabs.findIndex(t => t.id === activeTabId);
@@ -149,6 +151,14 @@ export default function TabBar({
 
   // Only show adjacent tab when there's actual drag progress (prevents flash at drag start)
   const showAdjacentTab = dragDirection !== null && hasDragProgress;
+
+  // Measure text width when editing changes or text changes
+  useEffect(() => {
+    if (measureRef.current) {
+      const width = measureRef.current.offsetWidth;
+      setTextWidth(width);
+    }
+  }, [isEditing, editingText, currentTab?.name]);
 
   // Gesture tracking
   const isGestureActiveRef = useRef(false);
@@ -357,12 +367,22 @@ export default function TabBar({
                 <ActionsEditHistory />
                 <div 
                   ref={containerRef}
-                  className="absolute box-border content-stretch flex gap-[8px] items-center justify-start left-1/2 min-w-0 px-0 py-[5px] top-1/2 translate-x-[-50%] translate-y-[-50%] w-fit"
+                  className="absolute box-border content-stretch flex gap-[8px] items-center justify-center left-1/2 px-0 py-[5px] top-1/2 translate-x-[-50%] translate-y-[-50%]"
+                  style={{ width: textWidth ? `${textWidth + 16 + 8}px` : undefined }}
                 >
                   <div className="h-[18px] relative shrink-0 w-[16px]">
                     <CanvasIcon canvasType={currentTab?.canvasType || null} />
                   </div>
                   <div className="box-border content-stretch flex items-center pb-px pt-0 px-0 relative shrink-0">
+                    {/* Hidden element to measure text width */}
+                    <span
+                      ref={measureRef}
+                      className="absolute invisible capitalize font-['Outfit:Regular',_sans-serif] font-normal leading-[normal] text-[16px] whitespace-pre pointer-events-none"
+                      aria-hidden="true"
+                    >
+                      {isEditing ? editingText : (currentTab?.name || 'Blank Tab')}
+                    </span>
+                    
                     {(isEditing && !dragDirection) ? (
                       <input
                         ref={inputRef}
@@ -372,11 +392,13 @@ export default function TabBar({
                         onBlur={handleNameBlur}
                         onKeyDown={handleNameKeyDown}
                         onPointerDown={handleInputPointerDown}
-                        className="capitalize font-['Outfit:Regular',_sans-serif] font-normal leading-[normal] max-w-[88px] relative shrink-0 text-[16px] text-left text-neutral-950 bg-transparent border-none outline-none w-fit p-0 m-0 min-w-0"
+                        style={{ width: textWidth ? `${textWidth}px` : undefined }}
+                        className="capitalize font-['Outfit:Regular',_sans-serif] font-normal leading-[normal] relative shrink-0 text-[16px] text-center text-neutral-950 bg-transparent border-none outline-none p-0 m-0 min-w-[2ch]"
                       />
                     ) : (
                       <p 
-                        className="tab-name-text capitalize font-['Outfit:Regular',_sans-serif] font-normal leading-[normal] max-w-[88px] overflow-ellipsis overflow-hidden relative shrink-0 text-[16px] text-left text-neutral-950 text-nowrap whitespace-pre cursor-pointer w-fit"
+                        className="tab-name-text capitalize font-['Outfit:Regular',_sans-serif] font-normal leading-[normal] overflow-ellipsis overflow-hidden relative shrink-0 text-[16px] text-center text-neutral-950 text-nowrap whitespace-pre cursor-pointer"
+                        style={{ width: textWidth ? `${textWidth}px` : undefined }}
                       >
                         {currentTab?.name || 'Blank Tab'}
                       </p>

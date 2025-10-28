@@ -331,6 +331,7 @@ interface CanvasAreaProps {
   activeTabId: string;
   dragProgress: MotionValue<number>;
   dragDirection: 'left' | 'right' | null;
+  dragDirectionRef: React.RefObject<'left' | 'right' | null>;
   onCanvasTypeSelect: (type: CanvasType) => void;
 }
 
@@ -339,6 +340,7 @@ function CanvasArea({
   activeTabId,
   dragProgress,
   dragDirection,
+  dragDirectionRef,
   onCanvasTypeSelect,
 }: CanvasAreaProps) {
   const [viewportWidth, setViewportWidth] = useState(
@@ -371,9 +373,7 @@ function CanvasArea({
   const currentTabX = currentTabXRef.current;
   const adjacentTabX = adjacentTabXRef.current;
 
-  // Ref for drag direction (avoids stale closures)
-  const dragDirectionRef = useRef(dragDirection);
-  dragDirectionRef.current = dragDirection;
+  // Use the passed ref for immediate direction access (avoids timing issues)
 
   const screenWidth = viewportWidth;
 
@@ -381,7 +381,6 @@ function CanvasArea({
   useEffect(() => {
     const updatePositions = (progress: number) => {
       const direction = dragDirectionRef.current;
-      console.log('[CanvasArea] updatePositions:', { progress, direction, hasDragProgress });
       if (direction === 'left') {
         currentTabX.set(-progress * screenWidth);
         adjacentTabX.set(screenWidth - (progress * screenWidth));
@@ -394,17 +393,13 @@ function CanvasArea({
       }
       
       // Update drag progress state to control visibility (prevents flash)
-      const shouldShow = progress > 0.01;
-      console.log('[CanvasArea] Setting hasDragProgress:', shouldShow, 'was:', hasDragProgress);
-      setHasDragProgress(shouldShow);
+      setHasDragProgress(progress > 0.01);
     };
 
-    const initialProgress = dragProgress.get();
-    console.log('[CanvasArea] Initial setup - progress:', initialProgress, 'direction:', dragDirectionRef.current);
-    updatePositions(initialProgress);
+    updatePositions(dragProgress.get());
     const unsubscribe = dragProgress.on('change', updatePositions);
     return () => unsubscribe();
-  }, [dragProgress, screenWidth, currentTabX, adjacentTabX]);
+  }, [dragProgress, screenWidth, currentTabX, adjacentTabX, dragDirectionRef]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -422,12 +417,6 @@ function CanvasArea({
   const effectiveDragDirection = dragDirection || lastDragDirectionRef.current;
   // Only show adjacent tab when there's actual drag progress (prevents flash at drag start)
   const showAdjacentTab = (effectiveDragDirection !== null && hasDragProgress) || displayedTabIndex !== activeIndex;
-  
-  console.log('[CanvasArea] Render:', { 
-    dragDirection, 
-    effectiveDragDirection, 
-    hasDragProgress, 
-    showAdjacentTab,
     displayedTabIndex,
     activeIndex,
     dragProgressValue: dragProgress.get()
@@ -657,8 +646,10 @@ function TabBar({
   const [isEditing, setIsEditing] = useState(false);
   const [editingText, setEditingText] = useState('');
   const [originalName, setOriginalName] = useState('');
+  const [textWidth, setTextWidth] = useState<number | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLSpanElement>(null);
 
   // Editing state for task name
   const [isEditingTask, setIsEditingTask] = useState(false);
@@ -693,6 +684,14 @@ function TabBar({
       setEditingText('');
     }
   }, [dragDirection, isEditing]);
+
+  // Measure text width when editing changes or text changes
+  useEffect(() => {
+    if (measureRef.current) {
+      const width = measureRef.current.offsetWidth;
+      setTextWidth(width);
+    }
+  }, [isEditing, editingText, tabs.find(t => t.id === activeTabId)?.name]);
 
   // Stable motion values for address bar positions
   const currentTabXRef = useRef(useMotionValue(0));
@@ -809,29 +808,7 @@ function TabBar({
     }
   };
 
-  // Dynamic width calculation for inputs
-  const [inputWidth, setInputWidth] = useState<number | null>(null);
-  const [taskInputWidth, setTaskInputWidth] = useState<number | null>(null);
 
-  useEffect(() => {
-    if (isEditing && containerRef.current) {
-      const measureText = containerRef.current.querySelector('.measure-text') as HTMLElement;
-      if (measureText) {
-        const width = measureText.offsetWidth;
-        setInputWidth(Math.max(width + 10, 40));
-      }
-    }
-  }, [editingText, isEditing]);
-
-  useEffect(() => {
-    if (isEditingTask && taskContainerRef.current) {
-      const measureText = taskContainerRef.current.querySelector('.task-measure-text') as HTMLElement;
-      if (measureText) {
-        const width = measureText.offsetWidth;
-        setTaskInputWidth(Math.max(width + 10, 40));
-      }
-    }
-  }, [editingTaskText, isEditingTask]);
 
   // Drag handlers
   const dragStartXRef = useRef(0);
@@ -992,31 +969,34 @@ function TabBar({
                         {/* Tab Name */}
                         <div 
                           ref={containerRef}
-                          className="basis-0 box-border content-stretch flex gap-[10px] grow items-center justify-center min-h-px min-w-px pb-px pt-0 px-0 relative shrink-0"
+                          className="box-border content-stretch flex items-center justify-center pb-px pt-0 px-0 relative shrink-0"
+                          style={{ width: textWidth ? `${textWidth}px` : undefined }}
                         >
+                          {/* Hidden element to measure text width */}
+                          <span
+                            ref={measureRef}
+                            className="absolute invisible capitalize font-['Outfit:Medium',_sans-serif] font-medium leading-[normal] text-[14px] whitespace-pre pointer-events-none"
+                            aria-hidden="true"
+                          >
+                            {isEditing ? editingText : currentTab?.name}
+                          </span>
+
                           {isEditing ? (
-                            <>
-                              <input
-                                ref={inputRef}
-                                type="text"
-                                value={editingText}
-                                onChange={handleTabNameChange}
-                                onBlur={handleTabNameBlur}
-                                onKeyDown={handleTabNameKeyDown}
-                                className="capitalize font-['Outfit:Medium',_sans-serif] font-medium leading-[normal] max-w-[200px] relative shrink-0 text-[#8e8e93] text-[14px] text-center bg-transparent border-none outline-none p-0 m-0 min-w-0"
-                                style={{ width: inputWidth ? `${inputWidth}px` : 'auto' }}
-                              />
-                              <span 
-                                className="measure-text capitalize font-['Outfit:Medium',_sans-serif] font-medium leading-[normal] text-[14px] absolute opacity-0 pointer-events-none whitespace-pre"
-                                aria-hidden="true"
-                              >
-                                {editingText || currentTab?.name}
-                              </span>
-                            </>
+                            <input
+                              ref={inputRef}
+                              type="text"
+                              value={editingText}
+                              onChange={handleTabNameChange}
+                              onBlur={handleTabNameBlur}
+                              onKeyDown={handleTabNameKeyDown}
+                              style={{ width: textWidth ? `${textWidth}px` : undefined }}
+                              className="capitalize font-['Outfit:Medium',_sans-serif] font-medium leading-[normal] relative text-[#8e8e93] text-[14px] text-center bg-transparent border-none outline-none p-0 m-0 min-w-[2ch]"
+                            />
                           ) : (
                             <p 
                               onClick={handleTabNameClick}
-                              className="capitalize font-['Outfit:Medium',_sans-serif] font-medium leading-[normal] max-w-[200px] overflow-ellipsis overflow-hidden relative shrink-0 text-[#8e8e93] text-[14px] text-center text-nowrap whitespace-pre cursor-pointer"
+                              className="capitalize font-['Outfit:Medium',_sans-serif] font-medium leading-[normal] overflow-ellipsis overflow-hidden relative text-[#8e8e93] text-[14px] text-center text-nowrap whitespace-pre cursor-pointer"
+                              style={{ width: textWidth ? `${textWidth}px` : undefined }}
                             >
                               {currentTab?.name}
                             </p>
@@ -1562,6 +1542,7 @@ export default function StandaloneTabBarApp() {
           activeTabId={activeTabId}
           dragProgress={dragProgress}
           dragDirection={dragDirection}
+          dragDirectionRef={dragDirectionRef}
           onCanvasTypeSelect={handleCanvasTypeSelect}
         />
       </div>
@@ -1574,6 +1555,7 @@ export default function StandaloneTabBarApp() {
         tabCount={task.tabs.length}
         dragProgress={dragProgress}
         dragDirection={dragDirection}
+        dragDirectionRef={dragDirectionRef}
         isTransitioning={isTransitioning}
         onSwipeStart={handleSwipeStart}
         onSwipeMove={handleSwipeMove}

@@ -415,6 +415,10 @@
     pointer-events: none;
   }
 
+  .invisible {
+    visibility: hidden;
+  }
+
   .visible {
     visibility: visible;
   }
@@ -709,10 +713,6 @@
     width: min-content;
   }
 
-  .w-fit {
-    width: fit-content;
-  }
-
   .w-full {
     width: 100%;
   }
@@ -739,6 +739,10 @@
 
   .min-w-0 {
     min-width: calc(var(--spacing) * 0);
+  }
+
+  .min-w-\[2ch\] {
+    min-width: 2ch;
   }
 
   .min-w-\[100px\] {
@@ -817,10 +821,6 @@
 
   .justify-center {
     justify-content: center;
-  }
-
-  .justify-start {
-    justify-content: flex-start;
   }
 
   .gap-2 {
@@ -1089,10 +1089,6 @@
 
   .text-center {
     text-align: center;
-  }
-
-  .text-left {
-    text-align: left;
   }
 
   .font-\[\'Outfit\'\,_sans-serif\] {
