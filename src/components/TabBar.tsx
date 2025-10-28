@@ -19,6 +19,7 @@ interface TabBarProps {
   tabCount: number;
   dragProgress: MotionValue<number>;
   dragDirection: 'left' | 'right' | null;
+  dragDirectionRef: React.RefObject<'left' | 'right' | null>;
   isTransitioning: boolean;
   onSwipeStart: (clientX: number) => boolean;
   onSwipeMove: (clientX: number) => void;
@@ -39,6 +40,7 @@ export default function TabBar({
   tabCount, 
   dragProgress,
   dragDirection,
+  dragDirectionRef,
   isTransitioning,
   onSwipeStart,
   onSwipeMove,
@@ -65,6 +67,9 @@ export default function TabBar({
   // Displayed tab index (lags during drag for smooth visual transition)
   const activeIndex = tabs.findIndex(t => t.id === activeTabId);
   const [displayedTabIndex, setDisplayedTabIndex] = useState(activeIndex);
+
+  // Track if there's meaningful drag progress (prevents flash at drag start)
+  const [hasDragProgress, setHasDragProgress] = useState(false);
 
   // Update displayed index only when not dragging
   useEffect(() => {
@@ -95,9 +100,7 @@ export default function TabBar({
   const currentTabX = currentTabXRef.current;
   const adjacentTabX = adjacentTabXRef.current;
 
-  // Ref for drag direction (avoids stale closures)
-  const dragDirectionRef = useRef(dragDirection);
-  dragDirectionRef.current = dragDirection;
+  // Use the passed ref for immediate direction access (avoids timing issues)
 
   const screenWidth = viewportWidth;
 
@@ -115,12 +118,15 @@ export default function TabBar({
         currentTabX.set(0);
         adjacentTabX.set(0);
       }
+      
+      // Update drag progress state to control visibility (prevents flash)
+      setHasDragProgress(progress > 0.01);
     };
 
     updatePositions(dragProgress.get());
     const unsubscribe = dragProgress.on('change', updatePositions);
     return () => unsubscribe();
-  }, [dragProgress, screenWidth, currentTabX, adjacentTabX]);
+  }, [dragProgress, screenWidth, currentTabX, adjacentTabX, dragDirectionRef]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -142,7 +148,7 @@ export default function TabBar({
     : null;
 
   // Only show adjacent tab when there's actual drag progress (prevents flash at drag start)
-  const showAdjacentTab = dragDirection !== null && dragProgress.get() > 0.01;
+  const showAdjacentTab = dragDirection !== null && hasDragProgress;
 
   // Gesture tracking
   const isGestureActiveRef = useRef(false);

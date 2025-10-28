@@ -353,6 +353,9 @@ function CanvasArea({
   const lastDragDirectionRef = useRef<'left' | 'right' | null>(null);
   const previewNewTabIdRef = useRef(`preview-new-${Date.now()}`);
 
+  // Track if there's meaningful drag progress (prevents flash at drag start)
+  const [hasDragProgress, setHasDragProgress] = useState(false);
+
   // Update displayed index only when not dragging
   useEffect(() => {
     if (!dragDirection) {
@@ -378,6 +381,7 @@ function CanvasArea({
   useEffect(() => {
     const updatePositions = (progress: number) => {
       const direction = dragDirectionRef.current;
+      console.log('[CanvasArea] updatePositions:', { progress, direction, hasDragProgress });
       if (direction === 'left') {
         currentTabX.set(-progress * screenWidth);
         adjacentTabX.set(screenWidth - (progress * screenWidth));
@@ -388,9 +392,16 @@ function CanvasArea({
         currentTabX.set(0);
         adjacentTabX.set(0);
       }
+      
+      // Update drag progress state to control visibility (prevents flash)
+      const shouldShow = progress > 0.01;
+      console.log('[CanvasArea] Setting hasDragProgress:', shouldShow, 'was:', hasDragProgress);
+      setHasDragProgress(shouldShow);
     };
 
-    updatePositions(dragProgress.get());
+    const initialProgress = dragProgress.get();
+    console.log('[CanvasArea] Initial setup - progress:', initialProgress, 'direction:', dragDirectionRef.current);
+    updatePositions(initialProgress);
     const unsubscribe = dragProgress.on('change', updatePositions);
     return () => unsubscribe();
   }, [dragProgress, screenWidth, currentTabX, adjacentTabX]);
@@ -410,7 +421,17 @@ function CanvasArea({
 
   const effectiveDragDirection = dragDirection || lastDragDirectionRef.current;
   // Only show adjacent tab when there's actual drag progress (prevents flash at drag start)
-  const showAdjacentTab = (effectiveDragDirection !== null && dragProgress.get() > 0.01) || displayedTabIndex !== activeIndex;
+  const showAdjacentTab = (effectiveDragDirection !== null && hasDragProgress) || displayedTabIndex !== activeIndex;
+  
+  console.log('[CanvasArea] Render:', { 
+    dragDirection, 
+    effectiveDragDirection, 
+    hasDragProgress, 
+    showAdjacentTab,
+    displayedTabIndex,
+    activeIndex,
+    dragProgressValue: dragProgress.get()
+  });
 
   const adjacentTab = effectiveDragDirection === 'right' && displayedTabIndex > 0 
     ? tabs[displayedTabIndex - 1]
@@ -594,6 +615,7 @@ interface TabBarProps {
   tabCount: number;
   dragProgress: MotionValue<number>;
   dragDirection: 'left' | 'right' | null;
+  dragDirectionRef: React.RefObject<'left' | 'right' | null>;
   isTransitioning: boolean;
   onSwipeStart: (clientX: number) => boolean;
   onSwipeMove: (clientX: number) => void;
@@ -614,6 +636,7 @@ function TabBar({
   tabCount, 
   dragProgress,
   dragDirection,
+  dragDirectionRef,
   isTransitioning,
   onSwipeStart,
   onSwipeMove,
@@ -647,6 +670,9 @@ function TabBar({
   const activeIndex = tabs.findIndex(t => t.id === activeTabId);
   const [displayedTabIndex, setDisplayedTabIndex] = useState(activeIndex);
 
+  // Track if there's meaningful drag progress (prevents flash at drag start)
+  const [hasDragProgress, setHasDragProgress] = useState(false);
+
   // Update displayed index only when not dragging
   useEffect(() => {
     if (!dragDirection) {
@@ -674,9 +700,7 @@ function TabBar({
   const currentTabX = currentTabXRef.current;
   const adjacentTabX = adjacentTabXRef.current;
 
-  // Ref for drag direction (avoids stale closures)
-  const dragDirectionRef = useRef(dragDirection);
-  dragDirectionRef.current = dragDirection;
+  // Use the passed ref for immediate direction access (avoids timing issues)
 
   const screenWidth = viewportWidth;
 
@@ -694,12 +718,15 @@ function TabBar({
         currentTabX.set(0);
         adjacentTabX.set(0);
       }
+      
+      // Update drag progress state to control visibility (prevents flash)
+      setHasDragProgress(progress > 0.01);
     };
 
     updatePositions(dragProgress.get());
     const unsubscribe = dragProgress.on('change', updatePositions);
     return () => unsubscribe();
-  }, [dragProgress, screenWidth, currentTabX, adjacentTabX]);
+  }, [dragProgress, screenWidth, currentTabX, adjacentTabX, dragDirectionRef]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -1042,7 +1069,7 @@ function TabBar({
             </motion.div>
 
             {/* Adjacent Tab Address Bar (for sliding animation) */}
-            {dragDirection && dragProgress.get() > 0.01 && (
+            {dragDirection && hasDragProgress && (
               <motion.div
                 className="absolute inset-x-0 top-0 h-full"
                 style={{ x: adjacentTabX, willChange: 'transform' }}
@@ -1212,6 +1239,7 @@ export default function StandaloneTabBarApp() {
   // Drag state for synchronized tab animations
   const dragProgress = useMotionValue(0);
   const [dragDirection, setDragDirection] = useState<'left' | 'right' | null>(null);
+  const dragDirectionRef = useRef<'left' | 'right' | null>(null); // Sync ref to avoid timing issues
   const [isTransitioning, setIsTransitioning] = useState(false);
   const isDragging = useRef(false);
   const dragStartX = useRef(0);
@@ -1270,6 +1298,7 @@ export default function StandaloneTabBarApp() {
     isDragging.current = true;
     dragStartX.current = clientX;
     lastClientX.current = clientX;
+    dragDirectionRef.current = null; // Set ref synchronously
     setDragDirection(null);
     dragProgress.set(0);
     return true;
@@ -1289,8 +1318,10 @@ export default function StandaloneTabBarApp() {
     // Determine direction on first meaningful movement
     if (!dragDirection && Math.abs(deltaX) > 5) {
       if (deltaX < 0) {
+        dragDirectionRef.current = 'left'; // Set ref synchronously FIRST
         setDragDirection('left');
       } else if (deltaX > 0 && currentIndex > 0) {
+        dragDirectionRef.current = 'right'; // Set ref synchronously FIRST
         setDragDirection('right');
       }
     }

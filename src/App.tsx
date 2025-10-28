@@ -33,6 +33,7 @@ export default function App() {
   // Drag state for synchronized tab animations
   const dragProgress = useMotionValue(0);
   const [dragDirection, setDragDirection] = useState<'left' | 'right' | null>(null);
+  const dragDirectionRef = useRef<'left' | 'right' | null>(null); // Sync ref to avoid timing issues
   const [isTransitioning, setIsTransitioning] = useState(false);
   const isDragging = useRef(false);
   const dragStartX = useRef(0);
@@ -199,6 +200,7 @@ export default function App() {
     isDragging.current = true;
     dragStartX.current = clientX;
     lastClientX.current = clientX;
+    dragDirectionRef.current = null; // Set ref synchronously
     setDragDirection(null);
     dragProgress.set(0); // Ensure clean start
     return true;
@@ -219,8 +221,10 @@ export default function App() {
     // Determine direction on first meaningful movement
     if (!dragDirection && Math.abs(deltaX) > 5) {
       if (deltaX < 0) {
+        dragDirectionRef.current = 'left'; // Set ref synchronously FIRST
         setDragDirection('left');  // Swipe left = go forward/create new
       } else if (deltaX > 0 && currentIndex > 0) {
+        dragDirectionRef.current = 'right'; // Set ref synchronously FIRST
         setDragDirection('right');  // Swipe right = go back (only if not first tab)
       }
     }
@@ -538,6 +542,7 @@ export default function App() {
           activeTabId={activeTab?.id || ''}
           dragProgress={dragProgress}
           dragDirection={dragDirection}
+          dragDirectionRef={dragDirectionRef}
           onCanvasTypeSelect={handleCanvasTypeSelect}
         />
       </div>
@@ -550,6 +555,7 @@ export default function App() {
         tabCount={task.tabs.length}
         dragProgress={dragProgress}
         dragDirection={dragDirection}
+        dragDirectionRef={dragDirectionRef}
         isTransitioning={isTransitioning}
         onSwipeStart={handleSwipeStart}
         onSwipeMove={handleSwipeMove}
